@@ -19,13 +19,10 @@ def get_total_pages() -> int:
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, 'lxml')
         
-    # Find the span that contains "Page 1 of 69"
-    # Use a lambda to search for the exact text pattern
     page_span = soup.find('span', string=lambda text: (text is not None) and ('Page' in text) and ('of' in text))
         
     if page_span:
-        text = page_span.text.strip()  # e.g., "Page 1 of 69"
-        # Extract the number after "of"
+        text = page_span.text.strip() 
         total_pages = text.split('of')[-1].strip()
         return int(total_pages)
     else:
