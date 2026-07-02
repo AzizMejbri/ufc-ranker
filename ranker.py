@@ -4,6 +4,62 @@ from typing import Dict
 
 K: float = 100
 
+# K-factor multipliers by finish type.
+# Dominant finishes (KO/TKO, Submission) earn a 30% Elo bonus.
+# Decisions earn a 15% reduction to reflect closer, less dominant wins.
+METHOD_K_MULTIPLIER: Dict[str, float] = {
+    'KO/TKO': 1.3,
+    'SUB':    1.3,
+    'DEC':    0.85,
+    'OTHER':  1.0,  # NC, DQ, Draw – treated neutrally (most skipped anyway)
+}
+
+
+def categorize_method(method) -> str:
+    """Classify a raw method string into one of: KO/TKO, SUB, DEC, OTHER.
+
+    The raw CSV contains 1 200+ unique method strings due to inconsistent
+    scraping.  We detect finish type by scanning for keywords (case-insensitive)
+    in the following priority order:
+      1. Submission  – 'sub', 'submission', 'choke', 'armbar', 'heel hook',
+                       'kimura', 'guillotine', 'triangle', 'kneebar',
+                       'lock', 'crank'
+      2. KO / TKO   – 'ko', 'tko', 'knockout', 'technical ko',
+                       'technical knockout'
+      3. Decision   – 'dec', 'decision', 'unanimous', 'majority', 'split',
+                       'u-dec', 'm-dec', 's-dec'
+      4. OTHER      – everything else (NC, DQ, Draw, numeric artefacts, …)
+    """
+    if pd.isna(method):
+        return 'OTHER'
+    m = str(method).upper()
+
+    SUB_KW = [
+        'SUB', 'SUBMISSION', 'CHOKE', 'ARMBAR', 'HEEL HOOK',
+        'KIMURA', 'GUILLOTINE', 'TRIANGLE', 'KNEEBAR', 'LOCK', 'CRANK',
+    ]
+    KO_KW = ['KO', 'TKO', 'KNOCKOUT', 'TECHNICAL KO', 'TECHNICAL KNOCKOUT']
+    DEC_KW = ['DEC', 'DECISION', 'UNANIMOUS', 'MAJORITY', 'SPLIT',
+               'U-DEC', 'M-DEC', 'S-DEC']
+
+    is_sub = any(kw in m for kw in SUB_KW)
+    is_ko  = any(kw in m for kw in KO_KW)
+    is_dec = any(kw in m for kw in DEC_KW)
+
+    # Priority: SUB first (so "Technical Submission" isn't caught by KO_KW)
+    if is_sub and not is_ko:
+        return 'SUB'
+    if is_ko and not is_dec:
+        return 'KO/TKO'
+    if is_dec and not is_ko and not is_sub:
+        return 'DEC'
+    # Mixed signals – dominant finish takes precedence over decision label
+    if is_ko:
+        return 'KO/TKO'
+    if is_sub:
+        return 'SUB'
+    return 'OTHER'
+
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     initial_len: int = len(df)
     df = df.drop_duplicates()
@@ -77,10 +133,15 @@ if __name__ == '__main__':
             # Skip draws/NCs for simplicity
             continue
         
+        # Determine K-factor multiplier from fight method
+        method_category: str = categorize_method(fight.method)
+        k_multiplier: float = METHOD_K_MULTIPLIER[method_category]
+        effective_k: float = K * k_multiplier
+
         # Update ratings
-        new_elo_fighter = elo_fighter + K * (actual_fighter - expected_fighter)
-        new_elo_opponent = elo_opponent + K * (actual_opponent - expected_opponent)
-        
+        new_elo_fighter = elo_fighter + effective_k * (actual_fighter - expected_fighter)
+        new_elo_opponent = elo_opponent + effective_k * (actual_opponent - expected_opponent)
+
         scores[fighter] = new_elo_fighter
         scores[opponent] = new_elo_opponent
         

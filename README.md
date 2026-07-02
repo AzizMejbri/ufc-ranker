@@ -45,7 +45,7 @@ Update rule:
 new_elo_fighter = elo_fighter + K * (actual_fighter - expected_fighter)
 ```
 
-Where **K = 100** (≈3× traditional chess Elo, making ratings more reactive to recent results).
+Where **K = 100** (≈3× traditional chess Elo, making ratings more reactive to recent results). Method‑based K‑factor multipliers: **KO/TKO** and **SUB** → 1.3×K (30% bonus), **DEC** → 0.85×K (15% reduction), other outcomes → K.
 
 #### Output
 `ufc_final_elo_rankings.csv` — schema: `fighter`, `elo`, `rank`
